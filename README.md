@@ -1,6 +1,23 @@
 # Smart City Environmental Monitoring Platform
 
-A distributed environmental monitoring system for Indian smart-city zones. IoT readings flow through FastAPI ingestion, RabbitMQ, a Python processor, PostgreSQL, a FastAPI reporting API, and a React dashboard.
+A deployed distributed environmental monitoring system for Indian smart-city zones. IoT readings flow through FastAPI ingestion, RabbitMQ, a Python processor, PostgreSQL, a FastAPI reporting API, and a React dashboard.
+
+## Live Deployment
+
+The project is deployed on Microsoft Azure using Azure Kubernetes Service.
+
+| Item | Link |
+| --- | --- |
+| Live Dashboard | http://smartcityproject.centralindia.cloudapp.azure.com |
+| API Health | http://smartcityproject.centralindia.cloudapp.azure.com/api/health |
+| Ingestion Health | http://smartcityproject.centralindia.cloudapp.azure.com/ingestion/health |
+| GitHub Repository | https://github.com/Hasir7/smart-city-environmental-monitoring |
+
+> Note: The public demo uses HTTP, so the browser may show "Not Secure". For production, HTTPS can be added with a custom domain, TLS certificate, and ingress controller.
+
+## Project Overview
+
+This capstone project collects near real-time environmental sensor data from Indian city zones. It monitors air quality, noise, temperature, and humidity. The system is designed with microservices, message queue processing, database storage, cloud deployment, and a dashboard for city administrators.
 
 ## Architecture
 
@@ -17,44 +34,45 @@ flowchart LR
     ACR[Azure Container Registry] --> AKS
 ```
 
+## Azure Deployment Architecture
+
+The implemented Azure deployment uses:
+
+- Azure Kubernetes Service (AKS), Free management tier, one small worker node
+- Azure Container Registry (ACR), Basic tier
+- Azure Database for PostgreSQL Flexible Server, burstable tier
+- Azure Key Vault with the AKS Secrets Store CSI driver
+- RabbitMQ running internally inside AKS
+- Azure Load Balancer public URL for the frontend dashboard
+- DNS label: `smartcityproject.centralindia.cloudapp.azure.com`
+- Optional Log Analytics and Application Insights
+
+Azure SQL is intentionally not used in this implementation. The application uses `psycopg` and PostgreSQL-specific SQL, so Azure Database for PostgreSQL is the compatible managed database.
+
 ## Local Docker Compose
 
-The local setup is unchanged and does not require Azure:
+The project can also run locally for development. Local setup does not require Azure:
 
 ```bash
 docker compose up --build
 ```
 
-Open:
+Local URLs:
 
 - Dashboard: http://localhost:3000
 - API docs through the dashboard proxy: http://localhost:3000/api/docs
 - Ingestion docs through the dashboard proxy: http://localhost:3000/ingestion/docs
 - RabbitMQ UI: http://localhost:15672 (`guest` / `guest`)
 
-Generate data manually if needed:
+Generate local sample data manually if needed:
 
 ```bash
 curl -X POST "http://localhost:3000/ingestion/simulate?count=40"
 ```
 
-## Azure Deployment Architecture
-
-The implemented Azure path uses:
-
-- Azure Kubernetes Service (AKS), Free management tier, one small worker node
-- Azure Container Registry (ACR), Basic tier
-- Azure Database for PostgreSQL Flexible Server, burstable tier
-- Azure Key Vault with the AKS Secrets Store CSI driver
-- RabbitMQ inside AKS for the capstone workload
-- One Azure Load Balancer public IP for the frontend
-- Optional Log Analytics and Application Insights
-
-Azure SQL is intentionally not used. The application uses `psycopg` and PostgreSQL-specific SQL, so Azure Database for PostgreSQL is the compatible managed database.
-
 ## Prerequisites
 
-Install Azure CLI, Terraform 1.6 or newer, and kubectl. Then sign in:
+Install Azure CLI, Terraform 1.6 or newer, Docker, and kubectl. Then sign in:
 
 ```bash
 az login
@@ -75,7 +93,7 @@ az provider register --namespace Microsoft.OperationalInsights
 
 ## 1. Create Azure Infrastructure
 
-Keep secrets out of shell history by setting Terraform environment variables. Use strong, URL-safe passwords containing uppercase, lowercase, numbers, and symbols such as `!` or `-` (avoid `/`, `@`, `:`, and spaces).
+Keep secrets out of shell history by setting Terraform environment variables. Use strong, URL-safe passwords containing uppercase, lowercase, numbers, and symbols such as `!` or `-`.
 
 ```bash
 export TF_VAR_postgres_admin_password='REPLACE_WITH_STRONG_DATABASE_PASSWORD'
@@ -89,26 +107,15 @@ terraform -chdir=infra/terraform apply capstone.tfplan
 terraform -chdir=infra/terraform output
 ```
 
-The defaults create resources in Central India. Override the region if the selected VM/SKU is unavailable:
-
-```bash
-terraform -chdir=infra/terraform apply \
-  -var="location=South India" \
-  -var="postgres_admin_password=$TF_VAR_postgres_admin_password" \
-  -var="rabbitmq_password=$TF_VAR_rabbitmq_password"
-```
-
 For Azure Monitor and Application Insights, add `-var="enable_monitoring=true"`. Monitoring is off by default to reduce capstone cost.
 
 ## 2. Build Images and Deploy to AKS
 
-The script reads Terraform outputs, builds all four images in ACR, renders Kubernetes placeholders, deploys the manifests, waits for every workload, and prints the public URL:
+The deployment script reads Terraform outputs, builds Docker images, pushes them to ACR, renders Kubernetes placeholders, deploys the manifests, waits for workloads, and prints the public URL:
 
 ```bash
 ./scripts/deploy-azure.sh capstone-v1
 ```
-
-This uses `az acr build`, so Docker does not need to run locally.
 
 Inspect the deployment:
 
@@ -119,26 +126,23 @@ kubectl get hpa -n smart-city
 kubectl logs deployment/processor -n smart-city --tail=100
 ```
 
-Get the public dashboard URL again:
-
-```bash
-export PUBLIC_IP="$(kubectl get service frontend -n smart-city -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
-echo "http://$PUBLIC_IP"
-curl "http://$PUBLIC_IP/api/health"
-curl "http://$PUBLIC_IP/ingestion/health"
-```
-
-Use `http://$PUBLIC_IP` in the capstone video. The frontend proxies `/api` and `/ingestion` internally, so the browser never calls localhost in Azure.
-
 ## 3. Verify the Public Demo
 
+Use the deployed Azure URL:
+
 ```bash
-curl -X POST "http://$PUBLIC_IP/ingestion/simulate?count=40"
-curl "http://$PUBLIC_IP/api/metrics/latest"
-curl "http://$PUBLIC_IP/api/metrics/summary"
+curl "http://smartcityproject.centralindia.cloudapp.azure.com/api/health"
+curl "http://smartcityproject.centralindia.cloudapp.azure.com/ingestion/health"
+curl -X POST "http://smartcityproject.centralindia.cloudapp.azure.com/ingestion/simulate?count=40"
+curl "http://smartcityproject.centralindia.cloudapp.azure.com/api/metrics/latest"
+curl "http://smartcityproject.centralindia.cloudapp.azure.com/api/metrics/summary"
 ```
 
-Open `http://$PUBLIC_IP` in a private browser window to prove it is publicly accessible.
+Open this in a browser for the final demo:
+
+```text
+http://smartcityproject.centralindia.cloudapp.azure.com
+```
 
 ## Azure DevOps CI/CD
 
@@ -175,7 +179,7 @@ Kubernetes creates RabbitMQ, ingestion, processor, API, frontend, secret synchro
 
 For this repository, the lowest-risk capstone deployment is the included short-lived AKS setup: Free AKS management tier, one `Standard_B2s_v2` node, Basic ACR, burstable `B_Standard_B1ms` PostgreSQL, one public IP, and monitoring disabled. AKS management may be free, but the VM, disks, load balancer/public IP, registry, database, bandwidth, and Key Vault operations can still incur charges.
 
-Azure Container Apps Consumption can be cheaper for HTTP services that scale to zero. Here, RabbitMQ and the processor must stay running and PostgreSQL remains billable, so the saving is smaller and it no longer demonstrates the supplied Kubernetes work. Use AKS for the final video, then destroy it promptly. Create an Azure Cost Management budget before deployment and check current regional prices in the Azure Pricing Calculator.
+Use AKS for the final video, then destroy it promptly after submission.
 
 ## Cleanup After Submission
 
