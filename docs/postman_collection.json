@@ -1,0 +1,73 @@
+{
+  "info": {
+    "name": "Smart City Environmental Monitoring APIs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Ingestion Health",
+      "request": {
+        "method": "GET",
+        "url": "{{ingestion_base_url}}/health"
+      }
+    },
+    {
+      "name": "Submit Sensor Reading",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sensor_id\": \"sensor-air-001\",\n  \"zone\": \"Bengaluru MG Road\",\n  \"metric\": \"air_quality\",\n  \"value\": 105,\n  \"unit\": \"AQI\"\n}"
+        },
+        "url": "{{ingestion_base_url}}/readings"
+      }
+    },
+    {
+      "name": "Generate Sample Data",
+      "request": {
+        "method": "POST",
+        "url": "{{ingestion_base_url}}/simulate?count=30"
+      }
+    },
+    {
+      "name": "API Health",
+      "request": {
+        "method": "GET",
+        "url": "{{api_base_url}}/health"
+      }
+    },
+    {
+      "name": "Latest Metrics",
+      "request": {
+        "method": "GET",
+        "url": "{{api_base_url}}/metrics/latest"
+      }
+    },
+    {
+      "name": "Metric Summary",
+      "request": {
+        "method": "GET",
+        "url": "{{api_base_url}}/metrics/summary"
+      }
+    },
+    {
+      "name": "Zone Summary",
+      "request": {
+        "method": "GET",
+        "url": "{{api_base_url}}/zones/summary"
+      }
+    },
+    {
+      "name": "Alerts",
+      "request": {
+        "method": "GET",
+        "url": "{{api_base_url}}/alerts"
+      }
+    }
+  ],
+  "variable": [
+    { "key": "ingestion_base_url", "value": "http://localhost:8001" },
+    { "key": "api_base_url", "value": "http://localhost:8000" }
+  ]
+}

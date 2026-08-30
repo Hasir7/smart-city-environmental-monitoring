@@ -1,0 +1,84 @@
+trigger:
+  branches:
+    include: [main]
+
+# Set these values in an Azure DevOps variable group named smart-city-azure.
+variables:
+  - group: smart-city-azure
+  - name: imageTag
+    value: $(Build.BuildId)
+  - name: namespace
+    value: smart-city
+
+stages:
+  - stage: Build
+    displayName: Build and push images to ACR
+    jobs:
+      - job: DockerBuild
+        pool:
+          vmImage: ubuntu-latest
+        strategy:
+          matrix:
+            ingestion:
+              repository: ingestion
+              dockerfile: services/ingestion/Dockerfile
+              buildContext: services/ingestion
+            processor:
+              repository: processor
+              dockerfile: services/processor/Dockerfile
+              buildContext: services/processor
+            api:
+              repository: api
+              dockerfile: services/api/Dockerfile
+              buildContext: services/api
+            frontend:
+              repository: frontend
+              dockerfile: frontend/Dockerfile
+              buildContext: frontend
+        steps:
+          - task: Docker@2
+            displayName: Build and push $(repository)
+            inputs:
+              command: buildAndPush
+              repository: $(repository)
+              Dockerfile: $(dockerfile)
+              buildContext: $(buildContext)
+              containerRegistry: $(acrServiceConnection)
+              tags: |
+                $(imageTag)
+                latest
+
+  - stage: Deploy
+    displayName: Deploy public dashboard to AKS
+    dependsOn: Build
+    jobs:
+      - deployment: DeployCapstone
+        environment: smart-city-capstone
+        pool:
+          vmImage: ubuntu-latest
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - task: AzureCLI@2
+                  displayName: Render manifests and deploy
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+                      az aks get-credentials --resource-group "$(resourceGroup)" --name "$(aksName)" --overwrite-existing
+                      mkdir -p "$(Pipeline.Workspace)/rendered-k8s"
+                      cp k8s/*.yaml "$(Pipeline.Workspace)/rendered-k8s/"
+                      sed -i "s|ACR_LOGIN_SERVER|$(acrLoginServer)|g; s|IMAGE_TAG|$(imageTag)|g" "$(Pipeline.Workspace)/rendered-k8s/deployments.yaml"
+                      sed -i "s|KEY_VAULT_NAME|$(keyVaultName)|g; s|KEY_VAULT_IDENTITY_CLIENT_ID|$(keyVaultIdentityClientId)|g; s|AZURE_TENANT_ID|$(tenantId)|g" "$(Pipeline.Workspace)/rendered-k8s/secret.yaml"
+                      kubectl apply -f "$(Pipeline.Workspace)/rendered-k8s/namespace.yaml"
+                      kubectl apply -f "$(Pipeline.Workspace)/rendered-k8s/configmap.yaml"
+                      kubectl apply -f "$(Pipeline.Workspace)/rendered-k8s/secret.yaml"
+                      kubectl apply -f "$(Pipeline.Workspace)/rendered-k8s/services.yaml"
+                      kubectl apply -f "$(Pipeline.Workspace)/rendered-k8s/deployments.yaml"
+                      kubectl apply -f "$(Pipeline.Workspace)/rendered-k8s/hpa.yaml"
+                      kubectl rollout status deployment/frontend -n "$(namespace)" --timeout=5m
+                      kubectl get service frontend -n "$(namespace)"

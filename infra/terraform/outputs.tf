@@ -1,0 +1,9 @@
+output "resource_group_name" { value = azurerm_resource_group.main.name }
+output "acr_name" { value = azurerm_container_registry.main.name }
+output "acr_login_server" { value = azurerm_container_registry.main.login_server }
+output "aks_cluster_name" { value = azurerm_kubernetes_cluster.main.name }
+output "key_vault_name" { value = azurerm_key_vault.main.name }
+output "key_vault_identity_client_id" { value = azurerm_kubernetes_cluster.main.key_vault_secrets_provider[0].secret_identity[0].client_id }
+output "tenant_id" { value = data.azurerm_client_config.current.tenant_id }
+output "postgres_server_fqdn" { value = azurerm_postgresql_flexible_server.main.fqdn }
+output "application_insights_name" { value = var.enable_monitoring ? azurerm_application_insights.main[0].name : null }
